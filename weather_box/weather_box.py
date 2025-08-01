@@ -1,3 +1,37 @@
+"""Reflex Weather App."""
+
+import reflex as rx
+from dotenv import load_dotenv
+import os
+import requests
+
+load_dotenv()
+API_KEY: str = os.getenv("API_KEY")
+BASE_URL: str = "http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}"
+
+class State(rx.State):
+    """The app state."""
+    city: str = ""
+    weather_data: dict = {}
+    
+    """Update city input"""
+    def get_city(self, name: str):
+        self.city = name
+    
+    def fetch_weather(self):
+        """Fetch weather data for the city"""
+        url = BASE_URL.format(CITY=self.city, API_KEY=API_KEY)
+        response = requests.get(url)
+        data = response.json()
+        if data.get("cod") == 200:
+            self.weather_data = {
+                "city": data["name"],
+                "temp": round(data["main"]["temp"] - 273.15, 2),  # Convert Kelvin to Celsius and round
+                "description": data["weather"][0]["description"].capitalize(),
+            }
+
+
+
 def index() -> rx.Component:
     """Main page component."""
     return rx.vstack(
@@ -5,7 +39,7 @@ def index() -> rx.Component:
         rx.input(
             placeholder="Enter city name",
             value=State.city,
-            on_change=State.update_city,
+            on_change=State.get_city,
         ),
         rx.button(
             "Get Weather",
@@ -33,3 +67,7 @@ def index() -> rx.Component:
         min_width="200px"
         
     )
+
+
+app = rx.App()
+app.add_page(index)
