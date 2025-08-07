@@ -1,12 +1,16 @@
 """Reflex Weather App."""
 
 import reflex as rx
+import aiohttp
+import asyncio
 from dotenv import load_dotenv
 import os
-import requests
 
 load_dotenv()
 API_KEY: str = os.getenv("API_KEY")
+if not API_KEY:
+    print("Error: API_KEY not found in environment variables")
+    exit(1)
 BASE_URL: str = "http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}"
 
 class State(rx.State):
@@ -18,17 +22,26 @@ class State(rx.State):
         """Update city input."""
         self.city = value
 
-    def fetch_weather(self):
-        """Fetch weather data for the city."""
+    async def fetch_weather(self):
+        """Asynchronously fetch weather data for the city."""
         url = BASE_URL.format(CITY=self.city, API_KEY=API_KEY)
-        response = requests.get(url)
-        data = response.json()
-        if data.get("cod") == 200:
-            self.weather_data = {
-                "city": data["name"],
-                "temp": round(data["main"]["temp"] - 273.15, 2),  # Convert Kelvin to Celsius and round
-                "description": data["weather"][0]["description"].capitalize(),
-            }
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(url) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if data.get("cod") == 200:
+                            self.weather_data = {
+                                "city": data["name"],
+                                "temp": round(data["main"]["temp"] - 273.15, 2),  # Convert Kelvin to Celsius and round
+                                "description": data["weather"][0]["description"].capitalize(),
+                            }
+                        else:
+                            self.weather_data = {"error": f"API error: {data.get('message')}"}
+                    else:
+                        self.weather_data = {"error": f"HTTP error: Status code {response.status}"}
+            except aiohttp.ClientError as e:
+                self.weather_data = {"error": f"Request error: {str(e)}"}
 
 def index() -> rx.Component:
     """Main page component."""
@@ -48,13 +61,16 @@ def index() -> rx.Component:
                 color=rx.color_mode_cond(light="darkslateblue", dark="white"),
                 box_shadow="0 6px 30px rgba(255, 255, 255, 0.3)"
             ),
-
             rx.cond(
                 State.weather_data,
-                rx.vstack(
-                    rx.text(f"City: {State.weather_data['city']}"),
-                    rx.text(f"Temperature: {State.weather_data['temp']}°C"),
-                    rx.text(f"Description: {State.weather_data['description']}"),
+                rx.cond(
+                    State.weather_data.get("error"),
+                    rx.text(State.weather_data["error"]),
+                    rx.vstack(
+                        rx.text(f"City: {State.weather_data['city']}"),
+                        rx.text(f"Temperature: {State.weather_data['temp']}°C"),
+                        rx.text(f"Description: {State.weather_data['description']}"),
+                    ),
                 ),
                 rx.text("Enter a city to see the weather."),
             ),
