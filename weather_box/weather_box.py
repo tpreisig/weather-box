@@ -2,7 +2,6 @@
 
 import reflex as rx
 import aiohttp
-import asyncio
 from dotenv import load_dotenv
 import os
 
@@ -14,14 +13,13 @@ if not API_KEY:
 BASE_URL: str = "http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}"
 
 class State(rx.State):
-    """The app state."""
     city: str = ""
     weather_data: dict = {}
 
     def update_city(self, value: str):
-        """Update city input."""
         self.city = value
 
+    @rx.event
     async def fetch_weather(self):
         """Asynchronously fetch weather data for the city."""
         url = BASE_URL.format(CITY=self.city, API_KEY=API_KEY)
@@ -31,6 +29,16 @@ class State(rx.State):
                     if response.status == 200:
                         data = await response.json()
                         if data.get("cod") == 200:
+                            yield rx.toast(
+                                "✅ Data feteched sucessfuly",
+                                position="top-right",
+                                style={
+                                    "background": "rgba(200, 255, 255, 0.8)",
+                                    "color": "green",
+                                    "border": "1px solid springgreen",
+                                    "border_radius": "12px"
+                                },
+                                )
                             self.weather_data = {
                                 "city": data["name"],
                                 "temp": round(data["main"]["temp"] - 273.15, 2),  # Convert Kelvin to Celsius and round
@@ -43,8 +51,8 @@ class State(rx.State):
             except aiohttp.ClientError as e:
                 self.weather_data = {"error": f"Request error: {str(e)}"}
 
-def index() -> rx.Component:
-    """Main page component."""
+@rx.page("/", "Weather Box")
+def render_ui() -> rx.Component:
     return rx.center(
         rx.vstack(
             rx.color_mode.button(position="top-left"),
@@ -57,7 +65,7 @@ def index() -> rx.Component:
             rx.button(
                 "Check Weather",
                 on_click=State.fetch_weather,
-                background=rx.color_mode_cond(light="rgb(180, 229, 13)", dark="slateblue"),
+                background=rx.color_mode_cond(light="rgb(200, 255, 255, 0.9)", dark="slateblue"),
                 color=rx.color_mode_cond(light="darkslateblue", dark="white"),
                 box_shadow="0 6px 30px rgba(255, 255, 255, 0.3)"
             ),
@@ -86,4 +94,3 @@ def index() -> rx.Component:
     )
 
 app = rx.App()
-app.add_page(index)
